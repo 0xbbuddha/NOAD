@@ -1,0 +1,174 @@
+---
+# Realistic services and artifacts per machine (Arc3 "local escalation" +
+# Arc1/Arc2 application surface). All tasks are filtered by
+# inventory_hostname since each machine plays a different role.
+
+# --- anbu-srv01: IT server (IIS + file share) ---
+- name: Install IIS on anbu-srv01
+  ansible.windows.win_feature:
+    name: Web-Server
+    include_management_tools: true
+    state: present
+  when: inventory_hostname == 'anbu-srv01'
+
+- name: Deploy an internal landing page (IT wiki) on anbu-srv01
+  ansible.windows.win_copy:
+    dest: C:\inetpub\wwwroot\index.html
+    content: |
+      <html><body>
+      <h1>Konoha IT - Internal wiki</h1>
+      <p>Documentation, deployment scripts and internal packages:
+      see the <code>\\anbu-srv01\IT</code> share.</p>
+      </body></html>
+  when: inventory_hostname == 'anbu-srv01'
+
+- name: Create the IT share folder on anbu-srv01
+  ansible.windows.win_file:
+    path: C:\Shares\IT
+    state: directory
+  when: inventory_hostname == 'anbu-srv01'
+
+- name: Drop a deployment script with plaintext credentials in the IT share
+  ansible.windows.win_copy:
+    dest: C:\Shares\IT\deploy_svc_iis.ps1
+    content: |
+      # (Re)deployment script for the IIS application pool - ANBU IT
+      $cred = New-Object PSCredential("{{ domain_netbios }}\svc_iis", (ConvertTo-SecureString "IisPool2024!" -AsPlainText -Force))
+      # TODO: automate password rotation for this account (never done since it went into production)
+  when: inventory_hostname == 'anbu-srv01'
+
+- name: Share the IT folder (read access for any authenticated user)
+  ansible.windows.win_share:
+    name: IT
+    path: C:\Shares\IT
+    full: Administrators
+    read: "Authenticated Users"
+    state: present
+  when: inventory_hostname == 'anbu-srv01'
+
+# --- mission-srv01: business server (simulated SQL/backup/applications) ---
+- name: Create the business file share folders on mission-srv01
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - C:\Shares\Backups
+    - C:\Shares\MissionData
+  when: inventory_hostname == 'mission-srv01'
+
+- name: Drop a backup script with plaintext credentials
+  ansible.windows.win_copy:
+    dest: C:\Shares\Backups\backup_job.ps1
+    content: |
+      # Scheduled backup job for the mission database
+      $cred = New-Object PSCredential("{{ domain_netbios }}\svc_backup", (ConvertTo-SecureString "Backup2024!" -AsPlainText -Force))
+  when: inventory_hostname == 'mission-srv01'
+
+- name: Drop an application config file with a plaintext connection string
+  ansible.windows.win_copy:
+    dest: C:\Shares\MissionData\mission_db_config.xml
+    content: |
+      <configuration>
+        <connectionStrings>
+          <add name="MissionDB" connectionString="Server=mission-srv01;Database=Missions;User Id=svc_sql;Password=Sql2024Weak!;" />
+        </connectionStrings>
+      </configuration>
+  when: inventory_hostname == 'mission-srv01'
+
+- name: Share Backups and MissionData (read access for any authenticated user)
+  ansible.windows.win_share:
+    name: "{{ item.name }}"
+    path: "{{ item.path }}"
+    full: Administrators
+    read: "Authenticated Users"
+    state: present
+  loop:
+    - { name: Backups, path: "C:\\Shares\\Backups" }
+    - { name: MissionData, path: "C:\\Shares\\MissionData" }
+  when: inventory_hostname == 'mission-srv01'
+
+# --- academy-ws01: client workstation (local escalation, Arc3) ---
+- name: "AlwaysInstallElevated (HKLM): allow MSI installs to run as SYSTEM"
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer
+    name: AlwaysInstallElevated
+    data: 1
+    type: dword
+  when: inventory_hostname == 'academy-ws01'
+
+- name: "AlwaysInstallElevated (HKCU): allow MSI installs to run as SYSTEM"
+  ansible.windows.win_regedit:
+    path: HKCU:\SOFTWARE\Policies\Microsoft\Windows\Installer
+    name: AlwaysInstallElevated
+    data: 1
+    type: dword
+  when: inventory_hostname == 'academy-ws01'
+
+- name: Create an application folder with a space-containing (unquotable) path on academy-ws01
+  ansible.windows.win_file:
+    path: "C:\\Program Files\\Naruto Tools\\Update Service"
+    state: directory
+  when: inventory_hostname == 'academy-ws01'
+
+- name: Allow authenticated users to modify the Naruto Tools tree
+  ansible.windows.win_acl:
+    path: "C:\\Program Files\\Naruto Tools"
+    user: "Authenticated Users"
+    rights: Modify
+    type: allow
+    state: present
+    inherit: ContainerInherit, ObjectInherit
+  when: inventory_hostname == 'academy-ws01'
+
+- name: Create the NarutoUpdateSvc service with an unquoted binary path (unquoted service path)
+  ansible.windows.win_shell: |
+    if (-not (Get-Service -Name NarutoUpdateSvc -ErrorAction SilentlyContinue)) {
+      sc.exe create NarutoUpdateSvc binPath= "C:\Program Files\Naruto Tools\Update Service\svc.exe" start= demand DisplayName= "Naruto Update Service"
+      Write-Output "CHANGED"
+    } else {
+      Write-Output "OK"
+    }
+  register: unquoted_svc_result
+  changed_when: "'CHANGED' in unquoted_svc_result.stdout"
+  when: inventory_hostname == 'academy-ws01'
+
+# --- hokage-dc01: GPP artifact (Group Policy Preferences cpassword) ---
+# Drops a Groups.xml directly into SYSVOL, encrypted with the public MS14-025
+# AES key, without going through New-GPO/New-GPLink (avoids any dependency
+# on the GPMC console). An "orphaned" GPP left in SYSVOL is actually a very
+# realistic scenario (a policy removed without cleaning up its files).
+- name: "GPP: drop a Groups.xml with an encrypted cpassword (MS14-025) into SYSVOL"
+  ansible.windows.win_shell: |
+    $sysvolPath = "C:\Windows\SYSVOL\domain\Policies\{7F3E9A10-52C4-4B8E-9D1A-3C6F8E2B7A44}"
+    $groupsPath = "$sysvolPath\Machine\Preferences\Groups"
+    if (-not (Test-Path $groupsPath)) {
+      New-Item -Path $groupsPath -ItemType Directory -Force | Out-Null
+      "[General]`r`nVersion=1" | Out-File -FilePath "$sysvolPath\GPT.INI" -Encoding ascii
+
+      $aesKey = [byte[]](0x4e,0x99,0x06,0xe8,0xfc,0xb6,0x6c,0xc9,0xfa,0xf4,0x93,0x10,0x62,0x0f,0xfe,0xe8,0xf4,0x96,0xe8,0x06,0xcc,0x05,0x79,0x90,0x20,0x9b,0x09,0xa4,0x33,0xb6,0x6c,0x1b)
+      $aes = [System.Security.Cryptography.Aes]::Create()
+      $aes.Key = $aesKey
+      $aes.IV = New-Object byte[](16)
+      $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+      $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+      $plain = [System.Text.Encoding]::Unicode.GetBytes("HelpDesk2024!")
+      $encryptor = $aes.CreateEncryptor()
+      $encrypted = $encryptor.TransformFinalBlock($plain, 0, $plain.Length)
+      $cpassword = [Convert]::ToBase64String($encrypted).TrimEnd('=').Replace('+','-').Replace('/','_')
+
+      $xml = @"
+    <?xml version="1.0" encoding="utf-8"?>
+    <Groups clsid="{3125E937-EB16-4b4c-9934-544FC6D24D26}">
+      <User clsid="{DF5F1855-51E5-4d24-8B1A-D9BDE98BA1D1}" name="svcdesk" image="2" changed="2024-01-15 10:00:00" uid="{12345678-1234-1234-1234-123456789abc}">
+        <Properties action="U" newName="" fullName="IT Helpdesk Local Account" description="Local account created by Group Policy - IT Helpdesk" cpassword="$cpassword" changeLogon="0" noChange="0" neverExpires="1" acctDisabled="0" userName="svcdesk"/>
+      </User>
+    </Groups>
+    "@
+      $xml | Out-File -FilePath "$groupsPath\Groups.xml" -Encoding utf8
+      Write-Output "CHANGED"
+    } else {
+      Write-Output "OK"
+    }
+  register: gpp_result
+  changed_when: "'CHANGED' in gpp_result.stdout"
+  when: inventory_hostname in groups['dc']

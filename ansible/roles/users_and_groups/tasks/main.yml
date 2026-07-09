@@ -1,0 +1,55 @@
+---
+- name: Create the Village OU tree
+  microsoft.ad.ou:
+    name: "{{ item.name }}"
+    path: "{{ item.parent_path }}"
+  loop: "{{ ad_ous }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create the groups
+  microsoft.ad.group:
+    name: "{{ item.name }}"
+    scope: "{{ item.scope }}"
+    category: "{{ item.category }}"
+    path: "{{ item.path }}"
+    description: "{{ item.description | default(omit) }}"
+  loop: "{{ ad_groups }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create the users
+  microsoft.ad.user:
+    name: "{{ item.name }}"
+    firstname: "{{ item.firstname }}"
+    surname: "{{ item.surname }}"
+    upn: "{{ item.name }}@{{ domain_name }}"
+    path: "{{ item.path }}"
+    password: "{{ item.password }}"
+    update_password: on_create
+    enabled: "{{ not (item.disabled | default(false)) }}"
+    description: "{{ item.description | default(omit) }}"
+    groups:
+      set: "{{ item.groups }}"
+    spn: "{{ {'set': item.spn} if item.spn is defined else omit }}"
+  loop: "{{ ad_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create the service accounts
+  microsoft.ad.user:
+    name: "{{ item.name }}"
+    firstname: "{{ item.firstname }}"
+    surname: "{{ item.surname }}"
+    upn: "{{ item.name }}@{{ domain_name }}"
+    path: "{{ item.path }}"
+    password: "{{ item.password }}"
+    update_password: on_create
+    enabled: true
+    description: "{{ item.description | default(omit) }}"
+    groups:
+      set: "{{ item.groups }}"
+    spn: "{{ {'set': item.spn} if item.spn is defined else omit }}"
+  loop: "{{ ad_service_accounts }}"
+  loop_control:
+    label: "{{ item.name }}"

@@ -1,0 +1,615 @@
+# NOAD (Naruto Oriented Active Directory) data model, consumed by the
+# users_and_groups and vulnerabilities roles. sAMAccountName convention:
+# firstname.lastname in lowercase, so that public OSINT enumeration (e.g.
+# the list of Naruto characters on Wikipedia) directly yields plausible
+# account names.
+
+ad_base_dn: "DC={{ domain_netbios | lower }},DC=local"
+ad_village_ou: "OU=Village,{{ ad_base_dn }}"
+ad_administration_ou: "OU=Administration,{{ ad_village_ou }}"
+ad_academy_ou: "OU=Academy,{{ ad_village_ou }}"
+ad_anbu_ou: "OU=ANBU,{{ ad_village_ou }}"
+ad_medical_ou: "OU=Medical,{{ ad_village_ou }}"
+ad_mission_ou: "OU=Mission,{{ ad_village_ou }}"
+ad_finance_ou: "OU=Finance,{{ ad_village_ou }}"
+ad_research_ou: "OU=Research,{{ ad_village_ou }}"
+ad_it_ou: "OU=IT,{{ ad_village_ou }}"
+ad_servers_ou: "OU=Servers,{{ ad_base_dn }}"
+ad_workstations_ou: "OU=Workstations,{{ ad_base_dn }}"
+ad_service_accounts_ou: "OU=Service Accounts,{{ ad_base_dn }}"
+ad_privileged_ou: "OU=Privileged,{{ ad_base_dn }}"
+
+ad_ous:
+  # "parent_path" = the container the OU is created in (the microsoft.ad.ou
+  # module expects the PARENT's path in "path", not the OU's own full DN).
+  # Order matters: Village must exist before its sub-OUs.
+  - name: Village
+    parent_path: "{{ ad_base_dn }}"
+  - name: Administration
+    parent_path: "{{ ad_village_ou }}"
+  - name: Academy
+    parent_path: "{{ ad_village_ou }}"
+  - name: ANBU
+    parent_path: "{{ ad_village_ou }}"
+  - name: Medical
+    parent_path: "{{ ad_village_ou }}"
+  - name: Mission
+    parent_path: "{{ ad_village_ou }}"
+  - name: Finance
+    parent_path: "{{ ad_village_ou }}"
+  - name: Research
+    parent_path: "{{ ad_village_ou }}"
+  - name: IT
+    parent_path: "{{ ad_village_ou }}"
+  - name: Servers
+    parent_path: "{{ ad_base_dn }}"
+  - name: Workstations
+    parent_path: "{{ ad_base_dn }}"
+  - name: Service Accounts
+    parent_path: "{{ ad_base_dn }}"
+  - name: Privileged
+    parent_path: "{{ ad_base_dn }}"
+
+ad_groups:
+  # --- Tiers (Privileged) ---
+  - name: GG_Hokage
+    scope: global
+    category: security
+    path: "{{ ad_privileged_ou }}"
+    description: "Tier 0 - the Hokage's inner circle, equivalent to Domain Admins"
+  - name: GG_ANBU
+    scope: global
+    category: security
+    path: "{{ ad_privileged_ou }}"
+    description: "Tier 1 - local administrators of anbu-srv01"
+  - name: GG_Jonin
+    scope: global
+    category: security
+    path: "{{ ad_privileged_ou }}"
+    description: "Tier 1 - workstation administrators"
+  - name: GG_Chunin
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Intermediate users"
+  - name: GG_Genin
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Standard users"
+
+  # --- Functions / departments ---
+  - name: GG_Medical
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Konoha's medical corps"
+  - name: GG_Mission
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Mission assignment desk"
+  - name: GG_Finance
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Village advisors / budget"
+  - name: GG_Research
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Scientific ninja tools (R&D)"
+  - name: GG_IT
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "IT support"
+  - name: GG_Backup
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Backup operations"
+  - name: GG_SQL
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Database operations"
+  - name: GG_Helpdesk
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Tier 1 support"
+
+  # --- Teams (cosmetic, BloodHound-friendly) ---
+  - name: GG_Team7
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Team 7"
+  - name: GG_Team8
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Team 8"
+  - name: GG_Team10
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Team 10"
+  - name: GG_TeamGai
+    scope: global
+    category: security
+    path: "{{ ad_village_ou }}"
+    description: "Team Gai"
+
+  # --- "Trap" groups (BloodHound noise + real forgotten weaknesses) ---
+  - name: GG_LegacyAdmins
+    scope: global
+    category: security
+    path: "{{ ad_privileged_ou }}"
+    description: "Old administrative delegation - never cleaned up"
+  - name: GG_TempAdmins
+    scope: global
+    category: security
+    path: "{{ ad_privileged_ou }}"
+    description: "Temporary access granted during a migration - never revoked"
+  - name: GG_ProjectPhoenix
+    scope: global
+    category: security
+    path: "{{ ad_privileged_ou }}"
+    description: "Archived project group - deliberate dead end"
+  - name: GG_Archive
+    scope: global
+    category: security
+    path: "{{ ad_privileged_ou }}"
+    description: "Old group, no longer in use"
+
+ad_users:
+  # --- Hokage's office / Administration ---
+  - name: naruto.uzumaki
+    firstname: Naruto
+    surname: Uzumaki
+    password: "Rasengan1!"
+    path: "{{ ad_administration_ou }}"
+    groups: [GG_Genin, GG_Team7]
+    dont_require_preauth: true
+    description: "Impatient Genin - too impatient to wait for Kerberos pre-authentication (AS-REP roastable)"
+
+  - name: shikamaru.nara
+    firstname: Shikamaru
+    surname: Nara
+    password: "Kagemane1!"
+    path: "{{ ad_administration_ou }}"
+    groups: [GG_Jonin, GG_Team10]
+    description: "Strategic advisor to the Hokage"
+
+  - name: tsunade.senju
+    firstname: Tsunade
+    surname: Senju
+    password: "SlugPrincess1!"
+    path: "{{ ad_administration_ou }}"
+    groups: [GG_Hokage, GG_Medical]
+    description: "Godaime Hokage - Tier 0"
+
+  - name: temari.sabaku
+    firstname: Temari
+    surname: Sabaku
+    password: "WindFan1!"
+    path: "{{ ad_administration_ou }}"
+    groups: [GG_Genin]
+    disabled: true
+    description: "Former Suna inter-village liaison - account disabled but never deleted"
+
+  - name: jiraiya.sannin
+    firstname: Jiraiya
+    surname: Sannin
+    password: "ToadSage1!"
+    path: "{{ ad_administration_ou }}"
+    groups: [GG_Jonin]
+    description: "Sannin - spy and advisor"
+
+  # --- ANBU ---
+  - name: kakashi.hatake
+    firstname: Kakashi
+    surname: Hatake
+    password: "Sharingan2!"
+    path: "{{ ad_anbu_ou }}"
+    groups: [GG_Jonin, GG_ANBU, GG_Team7]
+    description: "Former ANBU captain, Team 7 sensei - local administrator of academy-ws01"
+
+  - name: yamato.tenzo
+    firstname: Yamato
+    surname: Tenzo
+    password: "WoodStyle1!"
+    path: "{{ ad_anbu_ou }}"
+    groups: [GG_ANBU]
+    description: "ANBU - Wood Release"
+
+  - name: sai.shimura
+    firstname: Sai
+    surname: Shimura
+    password: "InkArt1!"
+    path: "{{ ad_anbu_ou }}"
+    groups: [GG_ANBU]
+    description: "ANBU - former Root operative"
+
+  - name: itachi.uchiha
+    firstname: Itachi
+    surname: Uchiha
+    password: "Mangekyo1!"
+    path: "{{ ad_anbu_ou }}"
+    groups: [GG_ANBU]
+    description: "ANBU - double life, reuses the svc_anbu service account's password"
+
+  - name: asuma.sarutobi
+    firstname: Asuma
+    surname: Sarutobi
+    password: "ChakraBlade1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Jonin, GG_Team10]
+    description: "Team 10 sensei"
+
+  - name: kurenai.yuhi
+    firstname: Kurenai
+    surname: Yuhi
+    password: "GenjutsuMaster1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Jonin, GG_Team8]
+    description: "Team 8 sensei"
+
+  - name: gai.maito
+    firstname: Gai
+    surname: Maito
+    password: "EightGates1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Jonin, GG_TeamGai]
+    description: "Team Gai sensei"
+
+  # --- Academy ---
+  - name: iruka.umino
+    firstname: Iruka
+    surname: Umino
+    password: "Instructor1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Chunin]
+    description: "Academy instructor"
+
+  - name: konohamaru.sarutobi
+    firstname: Konohamaru
+    surname: Sarutobi
+    password: "Sexyjutsu1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Genin]
+    description: "Grandson of the Sandaime"
+
+  - name: ebisu.tokuma
+    firstname: Ebisu
+    surname: Tokuma
+    password: "Elite1Sensei!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Chunin]
+    description: "Elite tutor"
+
+  - name: sasuke.uchiha
+    firstname: Sasuke
+    surname: Uchiha
+    password: "Sharingan1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Genin, GG_Team7]
+    description: "Genin - holds full control (GenericAll) over Sakura's account"
+
+  - name: sakura.haruno
+    firstname: Sakura
+    surname: Haruno
+    password: "CherryBlossom1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Genin, GG_Team7, GG_Medical]
+    description: "Genin, medic-nin apprentice"
+
+  - name: hinata.hyuga
+    firstname: Hinata
+    surname: Hyuga
+    password: "Byakugan1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Genin, GG_Team8]
+    description: "Genin - Hyuga clan"
+
+  - name: kiba.inuzuka
+    firstname: Kiba
+    surname: Inuzuka
+    password: "Akamaru1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Genin, GG_Team8]
+    description: "Genin - Inuzuka clan"
+
+  - name: shino.aburame
+    firstname: Shino
+    surname: Aburame
+    password: "KikaichuBugs1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Genin, GG_Team8]
+    description: "Genin - Aburame clan"
+
+  - name: ino.yamanaka
+    firstname: Ino
+    surname: Yamanaka
+    password: "MindTransfer1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Genin, GG_Team10]
+    description: "Genin - Yamanaka clan"
+
+  - name: choji.akimichi
+    firstname: Choji
+    surname: Akimichi
+    password: "Butterfly1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Genin, GG_Team10]
+    description: "Genin - Akimichi clan"
+
+  - name: rock.lee
+    firstname: Rock
+    surname: Lee
+    password: "Youth1Power!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Genin, GG_TeamGai]
+    description: "Genin - pure taijutsu"
+
+  - name: neji.hyuga
+    firstname: Neji
+    surname: Hyuga
+    password: "FateDestiny1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Genin, GG_TeamGai]
+    description: "Genin - Hyuga clan (branch family)"
+
+  - name: tenten.mitsu
+    firstname: Tenten
+    surname: Mitsu
+    password: "WeaponsMaster1!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Genin, GG_TeamGai]
+    description: "Genin - weapons specialist"
+
+  - name: mizuki.touji
+    firstname: Mizuki
+    surname: Touji
+    password: "Traitor1Scroll!"
+    path: "{{ ad_academy_ou }}"
+    groups: [GG_Chunin]
+    description: "Instructor - holds a forgotten GenericWrite right over Konohamaru"
+
+  # --- Medical ---
+  - name: shizune.kato
+    firstname: Shizune
+    surname: Kato
+    password: "Tonton1Pig!"
+    path: "{{ ad_medical_ou }}"
+    groups: [GG_Medical, GG_Chunin]
+    description: "Tsunade's assistant"
+
+  # --- Mission ---
+  - name: kotetsu.hagane
+    firstname: Kotetsu
+    surname: Hagane
+    password: "MissionDesk1!"
+    path: "{{ ad_mission_ou }}"
+    groups: [GG_Mission, GG_Chunin]
+    description: "Mission desk - reuses Izumo's password"
+
+  - name: izumo.kamizuki
+    firstname: Izumo
+    surname: Kamizuki
+    password: "MissionDesk1!"
+    path: "{{ ad_mission_ou }}"
+    groups: [GG_Mission, GG_Chunin]
+    description: "Mission desk - reuses Kotetsu's password"
+
+  - name: zabuza.momochi
+    firstname: Zabuza
+    surname: Momochi
+    password: "MistDemon1!"
+    path: "{{ ad_mission_ou }}"
+    groups: [GG_Genin]
+    description: "Mercenary retained by Konoha for the Wave Country bridge security detail - killed in action, account never decommissioned, local administrator access on mission-srv01 never revoked"
+
+  # --- Finance ---
+  - name: homura.mitokado
+    firstname: Homura
+    surname: Mitokado
+    password: "Elder1Advisor!"
+    path: "{{ ad_finance_ou }}"
+    groups: [GG_Finance, GG_Chunin]
+    description: "Village advisor"
+
+  - name: koharu.utatane
+    firstname: Koharu
+    surname: Utatane
+    password: "Elder2Advisor!"
+    path: "{{ ad_finance_ou }}"
+    groups: [GG_Finance, GG_Chunin]
+    description: "Village advisor"
+
+  # --- Research ---
+  - name: kabuto.yakushi
+    firstname: Kabuto
+    surname: Yakushi
+    password: "MedicalNin1!"
+    path: "{{ ad_research_ou }}"
+    groups: [GG_Research, GG_Genin]
+    description: "Researcher - holds a forgotten GenericAll over the GG_ProjectPhoenix group (dead end)"
+
+  # --- IT ---
+  - name: ibiki.morino
+    firstname: Ibiki
+    surname: Morino
+    password: "Interrogation1!"
+    path: "{{ ad_it_ou }}"
+    groups: [GG_IT, GG_Helpdesk]
+    description: "Intelligence division - not to be confused with the svc_ibiki service account"
+
+  - name: anko.mitarashi
+    firstname: Anko
+    surname: Mitarashi
+    password: "DangoSnacks1!"
+    path: "{{ ad_it_ou }}"
+    groups: [GG_IT, GG_Helpdesk]
+    description: "Intelligence division"
+
+  # --- Privileged (sensitive accounts isolated in their own OU) ---
+  - name: hiruzen.sarutobi
+    firstname: Hiruzen
+    surname: Sarutobi
+    password: "ThirdHokage68!"
+    path: "{{ ad_privileged_ou }}"
+    groups: [GG_LegacyAdmins]
+    disabled: true
+    description: "Sandaime Hokage - died fighting Orochimaru, account disabled but never deleted, still a member of a group nested into Domain Admins and forgotten. Requires an Edo Tensei to 'bring him back' (reactivation via Danzo's GenericWrite)."
+
+  - name: danzo.shimura
+    firstname: Danzo
+    surname: Shimura
+    password: "RootShadow1!"
+    path: "{{ ad_privileged_ou }}"
+    groups: [GG_IT]
+    description: "Founder of Root - holds a GenericWrite (Shadow Credentials) right over Hiruzen"
+
+# Service accounts (Kerberoastable and/or over-privileged), all in
+# OU=Service Accounts.
+ad_service_accounts:
+  - name: svc_ibiki
+    firstname: "Ibiki (svc)"
+    surname: Morino
+    password: "T&IDept0919!"
+    path: "{{ ad_service_accounts_ou }}"
+    groups: [GG_ANBU]
+    spn:
+      - "HTTP/anbu-srv01.{{ domain_name }}"
+    description: "ANBU service account - Kerberoastable (SPN + weak password)"
+
+  - name: svc_sql
+    firstname: SQL
+    surname: Service
+    password: "Sql2024Weak!"
+    path: "{{ ad_service_accounts_ou }}"
+    groups: [GG_SQL]
+    spn:
+      - "MSSQLSvc/mission-srv01.{{ domain_name }}:1433"
+    description: "SQL service account on mission-srv01 - Kerberoastable, password reused by svc_mission"
+
+  - name: svc_mission
+    firstname: Mission
+    surname: App
+    password: "Sql2024Weak!"
+    path: "{{ ad_service_accounts_ou }}"
+    groups: [GG_Mission]
+    spn:
+      - "MissionApp/mission-srv01.{{ domain_name }}"
+    description: "Business application on mission-srv01 - reuses svc_sql's password"
+
+  - name: svc_backup
+    firstname: Backup
+    surname: Service
+    password: "Backup2024!"
+    path: "{{ ad_service_accounts_ou }}"
+    groups: [GG_Backup]
+    spn:
+      - "BackupExec/mission-srv01.{{ domain_name }}"
+    description: "Backup account - Kerberoastable, local administrator of mission-srv01"
+
+  - name: svc_iis
+    firstname: IIS
+    surname: AppPool
+    password: "IisPool2024!"
+    path: "{{ ad_service_accounts_ou }}"
+    groups: [GG_IT]
+    spn:
+      - "HTTP/anbu-srv01.{{ domain_name }}:8080"
+    description: "IIS application pool identity on anbu-srv01"
+
+  - name: svc_print
+    firstname: Print
+    surname: Spooler
+    password: "PrintSpool1!"
+    path: "{{ ad_service_accounts_ou }}"
+    groups: [GG_IT]
+    description: "Account tied to the print spooler - classic entry point for PrinterBug"
+
+  - name: svc_inventory
+    firstname: Inventory
+    surname: Scanner
+    password: "InventoryScan1!"
+    path: "{{ ad_service_accounts_ou }}"
+    groups: [GG_IT]
+    description: "IT inventory tool - holds a forgotten GenericWrite over the mission-srv01$ computer object (RBCD)"
+
+  - name: svc_anbu
+    firstname: ANBU
+    surname: Tools
+    password: "Mangekyo1!"
+    path: "{{ ad_service_accounts_ou }}"
+    groups: [GG_ANBU]
+    spn:
+      - "ANBUTools/anbu-srv01.{{ domain_name }}"
+    description: "Internal ANBU tooling - reuses Itachi Uchiha's password"
+
+  - name: svc_monitoring
+    firstname: Monitoring
+    surname: Agent
+    password: "Monitor2024!"
+    path: "{{ ad_service_accounts_ou }}"
+    groups: [GG_IT]
+    description: "Monitoring agent - over-privileged with replication (DCSync) rights"
+
+# Machine accounts to mark as "trusted for delegation" (unconstrained
+# Kerberos delegation). anbu-srv01 becomes a collection point for
+# tickets/TGTs of any account (including Domain Admin) that authenticates to it.
+ad_unconstrained_delegation_computers:
+  - anbu-srv01
+
+# Deliberately dangerous ACLs: trustee holds "right" over target.
+# "right" must match a value of the
+# System.DirectoryServices.ActiveDirectoryRights enum (GenericWrite also
+# covers writing msDS-KeyCredentialLink -> "Shadow Credentials" abuse).
+ad_acl_grants:
+  - trustee: sasuke.uchiha
+    target: sakura.haruno
+    right: GenericAll
+  - trustee: danzo.shimura
+    target: hiruzen.sarutobi
+    right: GenericWrite
+  - trustee: svc_inventory
+    target: "mission-srv01$"
+    right: GenericWrite
+  - trustee: mizuki.touji
+    target: konohamaru.sarutobi
+    right: GenericWrite
+  - trustee: kabuto.yakushi
+    target: GG_ProjectPhoenix
+    right: GenericAll
+
+# Group nesting forgotten over time: GG_Hokage is the "legitimate" nesting
+# (Tsunade = de facto Domain Admin), GG_LegacyAdmins is the real weakness
+# (temporary delegation never cleaned up).
+ad_group_nesting:
+  - child: GG_Hokage
+    parent: "Domain Admins"
+  - child: GG_LegacyAdmins
+    parent: "Domain Admins"
+
+# Accounts/groups over-provisioned with full replication rights (DCSync:
+# DS-Replication-Get-Changes + DS-Replication-Get-Changes-All).
+ad_dcsync_grants:
+  - svc_monitoring
+
+# Local groups to populate on member servers/workstations (beyond the domain join).
+local_admin_grants:
+  anbu-srv01:
+    - "{{ domain_netbios }}\\GG_ANBU"
+    - "{{ domain_netbios }}\\GG_IT"
+  mission-srv01:
+    - "{{ domain_netbios }}\\svc_backup"
+    - "{{ domain_netbios }}\\GG_TempAdmins"
+    - "{{ domain_netbios }}\\zabuza.momochi"
+  academy-ws01:
+    - "{{ domain_netbios }}\\kakashi.hatake"
+    - "{{ domain_netbios }}\\GG_Jonin"

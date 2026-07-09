@@ -1,0 +1,120 @@
+---
+# All the tasks below introduce deliberate weaknesses to replay classic AD
+# attack techniques. Never reproduce these settings on a production domain.
+
+# --- AS-REP Roasting: disable Kerberos pre-authentication ---
+- name: "AS-REP roasting: disable DoesNotRequirePreAuth for the relevant accounts"
+  ansible.windows.win_shell: >
+    Set-ADAccountControl -Identity "{{ item.name }}" -DoesNotRequirePreAuth $true
+  loop: "{{ ad_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - inventory_hostname in groups['dc']
+    - item.dont_require_preauth | default(false)
+
+# --- Unconstrained Kerberos delegation on anbu-srv01 ---
+- name: "Unconstrained delegation: mark the machine accounts as trusted_for_delegation"
+  microsoft.ad.computer:
+    identity: "{{ item }}" # the module automatically appends the "$" suffix
+    trusted_for_delegation: true
+  loop: "{{ ad_unconstrained_delegation_computers }}"
+  when: inventory_hostname in groups['dc']
+
+# --- ACL abuse: trustee gets a right over target (e.g. GenericAll,
+#     GenericWrite -> also covers writing msDS-KeyCredentialLink for a
+#     Shadow Credentials-style abuse, or a computer object for RBCD) ---
+- name: "ACL abuse: grant the rights defined in ad_acl_grants"
+  ansible.windows.win_shell: |
+    $trustee = Get-ADObject -Filter "SamAccountName -eq '{{ item.trustee }}'" -Properties objectSid
+    $target  = Get-ADObject -Filter "SamAccountName -eq '{{ item.target }}'" -Properties distinguishedName
+    $sid     = New-Object System.Security.Principal.SecurityIdentifier($trustee.objectSid)
+    $acl     = Get-Acl "AD:$($target.DistinguishedName)"
+    $already = $acl.Access | Where-Object {
+      $_.IdentityReference.Value -like "*\{{ item.trustee }}" -and
+      $_.ActiveDirectoryRights -match "{{ item.right }}"
+    }
+    if (-not $already) {
+      $rule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        $sid,
+        [System.DirectoryServices.ActiveDirectoryRights]::{{ item.right }},
+        [System.Security.AccessControl.AccessControlType]::Allow
+      )
+      $acl.AddAccessRule($rule)
+      Set-Acl -Path "AD:$($target.DistinguishedName)" -AclObject $acl
+      Write-Output "CHANGED"
+    } else {
+      Write-Output "OK"
+    }
+  register: acl_result
+  changed_when: "'CHANGED' in acl_result.stdout"
+  loop: "{{ ad_acl_grants }}"
+  loop_control:
+    label: "{{ item.trustee }} -> {{ item.right }} -> {{ item.target }}"
+  when: inventory_hostname in groups['dc']
+
+# --- DCSync: full replication rights granted to an over-provisioned
+#     account (e.g. a monitoring agent) ---
+- name: "DCSync: grant DS-Replication-Get-Changes(-All) to the accounts defined in ad_dcsync_grants"
+  ansible.windows.win_shell: |
+    $rootDN  = (Get-ADDomain).DistinguishedName
+    $trustee = Get-ADObject -Filter "SamAccountName -eq '{{ item }}'" -Properties objectSid
+    $sid     = New-Object System.Security.Principal.SecurityIdentifier($trustee.objectSid)
+    $acl     = Get-Acl "AD:$rootDN"
+    $guids   = @("1131f6aa-9c07-11d1-f79f-00c04fc2dcd2","1131f6ad-9c07-11d1-f79f-00c04fc2dcd2")
+    $changed = $false
+    foreach ($guidStr in $guids) {
+      $already = $acl.Access | Where-Object {
+        $_.IdentityReference.Value -like "*\{{ item }}" -and
+        $_.ActiveDirectoryRights -match "ExtendedRight" -and
+        $_.ObjectType -eq [Guid]$guidStr
+      }
+      if (-not $already) {
+        $rule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+          $sid,
+          [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+          [System.Security.AccessControl.AccessControlType]::Allow,
+          [Guid]$guidStr
+        )
+        $acl.AddAccessRule($rule)
+        $changed = $true
+      }
+    }
+    if ($changed) {
+      Set-Acl -Path "AD:$rootDN" -AclObject $acl
+      Write-Output "CHANGED"
+    } else {
+      Write-Output "OK"
+    }
+  register: dcsync_result
+  changed_when: "'CHANGED' in dcsync_result.stdout"
+  loop: "{{ ad_dcsync_grants }}"
+  loop_control:
+    label: "{{ item }}"
+  when: inventory_hostname in groups['dc']
+
+# --- Group nesting: GG_Hokage (legitimate) and GG_LegacyAdmins (forgotten)
+#     both nested into Domain Admins ---
+- name: "Group nesting: nest the groups defined in ad_group_nesting"
+  ansible.windows.win_shell: |
+    $already = Get-ADGroupMember -Identity "{{ item.parent }}" | Where-Object { $_.SamAccountName -eq "{{ item.child }}" }
+    if (-not $already) {
+      Add-ADGroupMember -Identity "{{ item.parent }}" -Members "{{ item.child }}"
+      Write-Output "CHANGED"
+    } else {
+      Write-Output "OK"
+    }
+  register: nesting_result
+  changed_when: "'CHANGED' in nesting_result.stdout"
+  loop: "{{ ad_group_nesting }}"
+  loop_control:
+    label: "{{ item.child }} -> {{ item.parent }}"
+  when: inventory_hostname in groups['dc']
+
+# --- Excessive local administrators on member servers/workstations ---
+- name: "Local admins: apply local_admin_grants on this host"
+  ansible.windows.win_group_membership:
+    name: Administrators
+    members: "{{ local_admin_grants[inventory_hostname] }}"
+    state: present
+  when: local_admin_grants[inventory_hostname] is defined

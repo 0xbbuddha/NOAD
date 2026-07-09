@@ -1,0 +1,44 @@
+---
+- name: Rename the host to hokage-dc01
+  ansible.windows.win_hostname:
+    name: hokage-dc01
+  register: rename_result
+
+- name: Reboot if the hostname changed
+  ansible.windows.win_reboot:
+  when: rename_result.reboot_required
+
+- name: Install the AD DS role (+ RSAT tools)
+  ansible.windows.win_feature:
+    name: AD-Domain-Services
+    include_management_tools: true
+    include_sub_features: true
+    state: present
+  register: adds_feature
+
+- name: Reboot if required after installing the role
+  ansible.windows.win_reboot:
+  when: adds_feature.reboot_required
+
+- name: Set a strong password on the real local administrator account (RID 500, whatever its localized name is)
+  # This account becomes the domain Administrator once the forest is created.
+  # `net user <name> <password>` clears the UF_PASSWD_NOTREQD flag that
+  # Install-ADDSForest checks; we resolve the name via its SID (...-500) to
+  # stay independent of the box's locale (e.g. "Administrateur" on a French
+  # Windows Server).
+  ansible.windows.win_shell: |
+    $name = (Get-LocalUser | Where-Object { $_.SID -like '*-500' }).Name
+    net user $name "{{ builtin_admin_password }}"
+  changed_when: true
+
+- name: Promote hokage-dc01 as the 1st domain controller of the {{ domain_name }} forest
+  microsoft.ad.domain:
+    dns_domain_name: "{{ domain_name }}"
+    domain_netbios_name: "{{ domain_netbios }}"
+    safe_mode_password: "{{ safe_mode_password }}"
+    reboot: true
+  register: domain_result
+
+- name: Wait for the DC to be fully operational after promotion
+  ansible.windows.win_reboot:
+  when: domain_result.reboot_required | default(false)

@@ -1,0 +1,30 @@
+---
+- name: Promote hokage-dc01 and create the noad.local forest
+  hosts: dc
+  gather_facts: false
+  roles:
+    - dc_promotion
+
+- name: Populate the directory (OUs, groups, users)
+  hosts: dc
+  gather_facts: false
+  roles:
+    - users_and_groups
+
+- name: Join the member servers and client workstations to the domain
+  hosts: domain_joined
+  gather_facts: false
+  roles:
+    - domain_join
+
+- name: Apply the lab's deliberate weaknesses
+  hosts: all
+  gather_facts: false
+  roles:
+    - vulnerabilities
+
+- name: Deploy realistic services and artifacts (IIS, shares, GPP, local escalation)
+  hosts: all
+  gather_facts: false
+  roles:
+    - services_setup

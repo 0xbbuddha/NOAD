@@ -1,0 +1,21 @@
+domain_name: noad.local
+domain_netbios: NOAD
+domain_admin_upn: "vagrant@{{ domain_name }}"
+
+# Password of the local "vagrant" account (provided by the gusztavvargadr
+# boxes), which effectively becomes Domain Admin once hokage-dc01 becomes
+# the first DC of the forest (any member of the local Administrators group
+# is migrated to a domain account and added to Domain Admins during
+# promotion).
+domain_admin_password: vagrant
+
+# Strong password given to the RID 500 built-in account
+# (Administrator/Administrateur depending on the box's locale) before
+# Install-ADDSForest: Windows refuses to promote a DC as long as this
+# built-in account has an empty/weak password, even though "vagrant"
+# (another local administrator account) will be the real account used
+# afterwards. See the dc_promotion role.
+builtin_admin_password: "NarutoLab2026!"
+
+# Directory Services Restore Mode password (required when creating the forest).
+safe_mode_password: NarutoDSRM2026!
