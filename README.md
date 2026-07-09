@@ -24,11 +24,31 @@ chain.
 - VirtualBox and Vagrant installed.
 - Ansible collections `ansible.windows` and `microsoft.ad` installed
   (`ansible-galaxy install -r ansible/requirements.yml`).
+- Python 3 with PyYAML (`pip install pyyaml`) for `noadctl`.
 - This repo copied to `~/naruto-lab`.
 
 ## Deployment
 
-### 1. Start the VMs
+### The easy way: `noadctl`
+
+A small dependency-free CLI (like GOAD's `go.py` or PantheonLab's helper
+scripts) wraps Vagrant + Ansible into single commands:
+
+```bash
+cd ~/naruto-lab
+./noadctl deploy          # vagrant up + wait for WinRM + full ansible provisioning
+./noadctl status          # vagrant status + WinRM reachability per host
+./noadctl creds           # print every account/password in the lab
+./noadctl attack-path     # print docs/attack-path.md
+./noadctl snapshot save clean-install   # checkpoint before you start attacking
+./noadctl snapshot restore clean-install
+./noadctl destroy         # tear everything down (asks for confirmation)
+```
+
+Run `./noadctl --help` for the full command list (`up`, `halt`, `wait`,
+`provision`, `vpn-status`, ...).
+
+### The manual way
 
 ```bash
 cd ~/naruto-lab
@@ -42,8 +62,6 @@ starts `hokage-dc01` (192.168.56.10), `anbu-srv01` (192.168.56.11),
 VirtualBox private network. Vagrant itself does not trigger any
 provisioning: `ansible/site.yml` handles that separately.
 
-### 2. Configure the domain (Ansible)
-
 ```bash
 cd ~/naruto-lab/ansible
 ansible-playbook site.yml -i inventory/hosts.yml
@@ -53,10 +71,11 @@ Play order: DC promotion -> OU/group/user creation -> domain join for
 member servers/workstations -> applying the deliberate vulnerabilities
 (see [`docs/architecture.md`](docs/architecture.md) for details).
 
-### 3. Attack
+### Attack
 
-From `academy-ws01` or a separate attack machine on the same private
-network (e.g. Kali): see [`docs/attack-path.md`](docs/attack-path.md).
+From `academy-ws01`, or remotely over the WireGuard tunnel (see
+`docs/NOAD.md`, Remote access section) from a separate attack machine
+(e.g. Kali): see [`docs/attack-path.md`](docs/attack-path.md).
 
 ## Notes / known limitations
 

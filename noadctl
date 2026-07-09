@@ -1,0 +1,288 @@
+#!/usr/bin/env python3
+"""
+noadctl - deployment CLI for NOAD (Naruto Oriented Active Directory).
+
+Wraps Vagrant + Ansible so the whole lab can be brought up, torn down,
+snapshotted and inspected with a single command, the same way GOAD's
+go.py / PantheonLab's helper scripts do for their labs.
+
+Usage:
+  ./noadctl deploy              # vagrant up + wait for WinRM + full ansible provisioning
+  ./noadctl up [VM...]          # vagrant up (all VMs, or the ones named)
+  ./noadctl halt [VM...]        # vagrant halt
+  ./noadctl destroy [VM...]     # vagrant destroy (asks for confirmation)
+  ./noadctl status              # vagrant status + WinRM reachability per host
+  ./noadctl wait                # block until every VM answers on WinRM (5985)
+  ./noadctl provision           # (re)run ansible-playbook site.yml
+  ./noadctl creds                # print every account/password defined in the lab
+  ./noadctl snapshot save NAME
+  ./noadctl snapshot restore NAME
+  ./noadctl snapshot list
+  ./noadctl vpn-status           # show the WireGuard tunnel status on this host
+  ./noadctl attack-path          # print docs/attack-path.md
+"""
+
+import argparse
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+ROOT = Path(__file__).resolve().parent
+ANSIBLE_DIR = ROOT / "ansible"
+INVENTORY = ANSIBLE_DIR / "inventory" / "hosts.yml"
+NARUTO_UNIVERSE = ANSIBLE_DIR / "group_vars" / "all" / "naruto_universe.yml"
+DOMAIN_VARS = ANSIBLE_DIR / "group_vars" / "all" / "domain.yml"
+WINRM_PORT = 5985
+
+# --- tiny ANSI helpers, no third-party deps ---
+BOLD = "\033[1m"
+GREEN = "\033[32m"
+RED = "\033[31m"
+YELLOW = "\033[33m"
+CYAN = "\033[36m"
+RESET = "\033[0m"
+
+
+def banner(text):
+    print(f"\n{BOLD}{CYAN}==> {text}{RESET}", flush=True)
+
+
+def ok(text):
+    print(f"{GREEN}[ok]{RESET} {text}", flush=True)
+
+
+def warn(text):
+    print(f"{YELLOW}[!]{RESET} {text}", flush=True)
+
+
+def err(text):
+    print(f"{RED}[x]{RESET} {text}", flush=True)
+
+
+def run(cmd, cwd=ROOT, check=True):
+    """Run a command, streaming its output live."""
+    print(f"{BOLD}$ {' '.join(cmd)}{RESET}", flush=True)
+    result = subprocess.run(cmd, cwd=cwd)
+    if check and result.returncode != 0:
+        err(f"command failed (exit {result.returncode}): {' '.join(cmd)}")
+        sys.exit(result.returncode)
+    return result.returncode
+
+
+def load_inventory():
+    """Return {hostname: ip} for every host declared in the Ansible inventory."""
+    if yaml is None:
+        err("PyYAML is required (pip install pyyaml) to read the inventory.")
+        sys.exit(1)
+    data = yaml.safe_load(INVENTORY.read_text())
+    hosts = {}
+
+    def walk(node):
+        if not isinstance(node, dict):
+            return
+        for name, hostvars in (node.get("hosts") or {}).items():
+            if hostvars and "ansible_host" in hostvars:
+                hosts[name] = hostvars["ansible_host"]
+        for child in (node.get("children") or {}).values():
+            walk(child)
+
+    walk(data.get("all", {}))
+    return hosts
+
+
+def winrm_reachable(ip, timeout=2):
+    try:
+        with socket.create_connection((ip, WINRM_PORT), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+# --- commands ---
+
+def cmd_up(args):
+    banner("vagrant up")
+    run(["vagrant", "up", *args.vm])
+
+
+def cmd_halt(args):
+    banner("vagrant halt")
+    run(["vagrant", "halt", *args.vm])
+
+
+def cmd_destroy(args):
+    targets = args.vm or ["all VMs"]
+    if not args.force:
+        answer = input(
+            f"{YELLOW}This will destroy {', '.join(targets)}. Type 'yes' to continue: {RESET}"
+        )
+        if answer.strip().lower() != "yes":
+            warn("aborted.")
+            return
+    banner("vagrant destroy")
+    run(["vagrant", "destroy", "-f", *args.vm])
+
+
+def cmd_wait(args):
+    banner("Waiting for WinRM (port 5985) on every host")
+    hosts = load_inventory()
+    deadline = time.time() + args.timeout
+    pending = dict(hosts)
+    while pending and time.time() < deadline:
+        for name, ip in list(pending.items()):
+            if winrm_reachable(ip):
+                ok(f"{name} ({ip}) is up")
+                del pending[name]
+        if pending:
+            time.sleep(5)
+    if pending:
+        for name, ip in pending.items():
+            err(f"{name} ({ip}) never answered on WinRM")
+        sys.exit(1)
+    ok("all hosts reachable")
+
+
+def cmd_status(args):
+    banner("vagrant status")
+    run(["vagrant", "status"], check=False)
+    banner("WinRM reachability")
+    for name, ip in load_inventory().items():
+        if winrm_reachable(ip):
+            ok(f"{name:<15} {ip:<15} WinRM up")
+        else:
+            err(f"{name:<15} {ip:<15} WinRM unreachable")
+
+
+def cmd_provision(args):
+    banner("ansible-playbook site.yml")
+    cmd = ["ansible-playbook", "site.yml", "-i", "inventory/hosts.yml"]
+    if args.tags:
+        cmd += ["--tags", args.tags]
+    run(cmd, cwd=ANSIBLE_DIR)
+
+
+def cmd_deploy(args):
+    cmd_up(argparse.Namespace(vm=[]))
+    cmd_wait(argparse.Namespace(timeout=args.timeout))
+    cmd_provision(argparse.Namespace(tags=None))
+    banner("NOAD is deployed")
+    print("Run './noadctl creds' for the account list, or see docs/NOAD.md.")
+
+
+def cmd_snapshot(args):
+    if args.action == "list":
+        run(["vagrant", "snapshot", "list"])
+    elif args.action == "save":
+        if not args.name:
+            err("snapshot save requires a NAME")
+            sys.exit(1)
+        run(["vagrant", "snapshot", "save", args.name])
+    elif args.action == "restore":
+        if not args.name:
+            err("snapshot restore requires a NAME")
+            sys.exit(1)
+        run(["vagrant", "snapshot", "restore", args.name])
+
+
+def cmd_creds(args):
+    if yaml is None:
+        err("PyYAML is required (pip install pyyaml) to read the credentials.")
+        sys.exit(1)
+    banner("Infrastructure credentials")
+    print(f"{'vagrant':<20} vagrant          local admin on every VM -> Domain Admin after DC promotion")
+    domain_vars = yaml.safe_load(DOMAIN_VARS.read_text())
+    print(f"{'Administrator':<20} {domain_vars.get('builtin_admin_password', '?'):<16} built-in local admin (RID 500) of hokage-dc01")
+    print(f"{'DSRM':<20} {domain_vars.get('safe_mode_password', '?')}")
+
+    def render(text):
+        return (text
+                .replace("{{ domain_name }}", domain_vars.get("domain_name", ""))
+                .replace("{{ domain_netbios }}", domain_vars.get("domain_netbios", "")))
+
+    data = yaml.safe_load(NARUTO_UNIVERSE.read_text())
+    banner("Domain users")
+    for u in data.get("ad_users", []):
+        flag = " [disabled]" if u.get("disabled") else ""
+        flag += " [AS-REP roastable]" if u.get("dont_require_preauth") else ""
+        print(f"{u['name']:<22} {u['password']:<18}{flag}")
+
+    banner("Service accounts")
+    for u in data.get("ad_service_accounts", []):
+        spn = ", ".join(render(s) for s in u.get("spn", [])) or "-"
+        print(f"{u['name']:<22} {u['password']:<18} SPN: {spn}")
+
+
+def cmd_vpn_status(args):
+    banner("WireGuard status (wg0)")
+    run(["sudo", "wg", "show"], check=False)
+
+
+def cmd_attack_path(args):
+    path = ROOT / "docs" / "attack-path.md"
+    print(path.read_text())
+
+
+def build_parser():
+    p = argparse.ArgumentParser(prog="noadctl", description="NOAD deployment CLI")
+    sub = p.add_subparsers(dest="command", required=True)
+
+    sp = sub.add_parser("deploy", help="vagrant up + wait for WinRM + full ansible provisioning")
+    sp.add_argument("--timeout", type=int, default=1800, help="seconds to wait for WinRM (default 1800)")
+    sp.set_defaults(func=cmd_deploy)
+
+    sp = sub.add_parser("up", help="vagrant up")
+    sp.add_argument("vm", nargs="*", help="specific VM name(s), default: all")
+    sp.set_defaults(func=cmd_up)
+
+    sp = sub.add_parser("halt", help="vagrant halt")
+    sp.add_argument("vm", nargs="*")
+    sp.set_defaults(func=cmd_halt)
+
+    sp = sub.add_parser("destroy", help="vagrant destroy")
+    sp.add_argument("vm", nargs="*")
+    sp.add_argument("-f", "--force", action="store_true", help="skip confirmation")
+    sp.set_defaults(func=cmd_destroy)
+
+    sp = sub.add_parser("wait", help="wait until every VM answers on WinRM")
+    sp.add_argument("--timeout", type=int, default=1800)
+    sp.set_defaults(func=cmd_wait)
+
+    sp = sub.add_parser("status", help="vagrant status + WinRM reachability")
+    sp.set_defaults(func=cmd_status)
+
+    sp = sub.add_parser("provision", help="(re)run ansible-playbook site.yml")
+    sp.add_argument("--tags", help="restrict to specific ansible tags")
+    sp.set_defaults(func=cmd_provision)
+
+    sp = sub.add_parser("creds", help="print every account/password in the lab")
+    sp.set_defaults(func=cmd_creds)
+
+    sp = sub.add_parser("snapshot", help="wraps vagrant snapshot save/restore/list")
+    sp.add_argument("action", choices=["save", "restore", "list"])
+    sp.add_argument("name", nargs="?")
+    sp.set_defaults(func=cmd_snapshot)
+
+    sp = sub.add_parser("vpn-status", help="show the WireGuard tunnel status")
+    sp.set_defaults(func=cmd_vpn_status)
+
+    sp = sub.add_parser("attack-path", help="print docs/attack-path.md")
+    sp.set_defaults(func=cmd_attack_path)
+
+    return p
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
