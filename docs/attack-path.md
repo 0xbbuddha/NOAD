@@ -50,9 +50,15 @@ Several independent vectors, all deployed by the `services_setup` role:
 
 ## Arc 4 - Jonin (Active Directory escalation)
 
-- **Kerberoasting**: `svc_ibiki`, `svc_sql`, `svc_mission`, `svc_backup`
-  and `svc_anbu` carry SPNs. Request a TGS for each
-  (`GetUserSPNs.py noad.local/naruto.uzumaki`) and crack them offline.
+- **Kerberoasting**: `svc_ibiki`, `svc_sql`, `svc_mission`, `svc_backup`,
+  `svc_iis` and `svc_anbu` all carry SPNs and are reported as
+  Kerberoastable by any tool. Request a TGS for each
+  (`GetUserSPNs.py noad.local/naruto.uzumaki`) and crack them offline -
+  but not all of them are worth the compute: `svc_ibiki` and `svc_iis`
+  have long random passwords and are deliberate dead ends, while
+  `svc_sql`, `svc_mission`, `svc_backup` and `svc_anbu` have weak,
+  crackable ones. Realistic Kerberoasting means triaging which hashes are
+  actually worth cracking, not blindly running hashcat on everything.
 - **Password reuse**: `svc_sql` and `svc_mission` share the same
   password, as do `svc_anbu` and `itachi.uchiha` - cracking one reveals
   the other. `kotetsu.hagane` and `izumo.kamizuki` also share their

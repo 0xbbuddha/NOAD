@@ -479,12 +479,12 @@ ad_service_accounts:
   - name: svc_ibiki
     firstname: "Ibiki (svc)"
     surname: Morino
-    password: "T&IDept0919!"
+    password: "Np30-Wpa5g!epwjz%Zg@#IJ*7pB#Ghqr"
     path: "{{ ad_service_accounts_ou }}"
     groups: [GG_ANBU]
     spn:
       - "HTTP/anbu-srv01.{{ domain_name }}"
-    description: "ANBU service account - Kerberoastable (SPN + weak password)"
+    description: "ANBU service account - Kerberoastable but a dead end (strong random password, no further ACL/local admin)"
 
   - name: svc_sql
     firstname: SQL
@@ -519,12 +519,12 @@ ad_service_accounts:
   - name: svc_iis
     firstname: IIS
     surname: AppPool
-    password: "IisPool2026!"
+    password: "6eokg83o=^l1f%bLsNdJ0p9GwzRQ2lej"
     path: "{{ ad_service_accounts_ou }}"
     groups: [GG_IT]
     spn:
       - "HTTP/anbu-srv01.{{ domain_name }}:8080"
-    description: "IIS application pool identity on anbu-srv01"
+    description: "IIS application pool identity on anbu-srv01 - Kerberoastable but a dead end (strong random password)"
 
   - name: svc_print
     firstname: Print

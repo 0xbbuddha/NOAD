@@ -19,6 +19,11 @@ full infrastructure and credentials,
 and [`docs/attack-path.md`](docs/attack-path.md) for the complete attack
 chain.
 
+Only Konoha is built so far ("NOAD Core"). See
+[`docs/architecture.md`](docs/architecture.md) for the full OU/group
+breakdown and the planned village extensions (Suna, Kiri, Kumo,
+Akatsuki, Orochimaru Labs).
+
 ## Prerequisites on the deployment host (192.168.1.21)
 
 - VirtualBox and Vagrant installed.

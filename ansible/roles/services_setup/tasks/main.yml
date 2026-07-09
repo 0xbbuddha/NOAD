@@ -33,7 +33,7 @@
     dest: C:\Shares\IT\deploy_svc_iis.ps1
     content: |
       # (Re)deployment script for the IIS application pool - ANBU IT
-      $cred = New-Object PSCredential("{{ domain_netbios }}\svc_iis", (ConvertTo-SecureString "IisPool2026!" -AsPlainText -Force))
+      $cred = New-Object PSCredential("{{ domain_netbios }}\svc_iis", (ConvertTo-SecureString "6eokg83o=^l1f%bLsNdJ0p9GwzRQ2lej" -AsPlainText -Force))
       # TODO: automate password rotation for this account (never done since it went into production)
   when: inventory_hostname == 'anbu-srv01'
 

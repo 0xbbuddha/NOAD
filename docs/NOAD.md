@@ -140,11 +140,11 @@ OSINT section below, this is intentional.
 
 | Account           | SPN                                                 | Group       | Notable trait |
 |-------------------|------------------------------------------------------|-------------|-------------------|
-| svc_ibiki         | `HTTP/anbu-srv01.noad.local`                          | GG_ANBU     | Kerberoastable |
+| svc_ibiki         | `HTTP/anbu-srv01.noad.local`                          | GG_ANBU     | Kerberoastable but a **dead end** - strong random password |
 | svc_sql           | `MSSQLSvc/mission-srv01.noad.local:1433`              | GG_SQL      | Kerberoastable, password reused by `svc_mission` |
 | svc_mission       | `MissionApp/mission-srv01.noad.local`                 | GG_Mission  | Kerberoastable, same password as `svc_sql` |
 | svc_backup        | `BackupExec/mission-srv01.noad.local`                 | GG_Backup   | Kerberoastable, local admin of `mission-srv01` |
-| svc_iis           | `HTTP/anbu-srv01.noad.local:8080`                     | GG_IT       | IIS application pool identity |
+| svc_iis           | `HTTP/anbu-srv01.noad.local:8080`                     | GG_IT       | IIS application pool identity - Kerberoastable but a **dead end** (strong random password); the real password still leaks in plaintext via the `\\anbu-srv01\IT` share |
 | svc_print         | -                                                      | GG_IT       | Tied to the print spooler (PrinterBug) |
 | svc_inventory     | -                                                      | GG_IT       | Forgotten `GenericWrite` over the `mission-srv01$` computer object -> RBCD |
 | svc_anbu          | `ANBUTools/anbu-srv01.noad.local`                     | GG_ANBU     | Kerberoastable, same password as `itachi.uchiha` |
