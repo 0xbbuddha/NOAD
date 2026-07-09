@@ -147,7 +147,12 @@ ad_groups:
     scope: global
     category: security
     path: "{{ ad_privileged_ou }}"
-    description: "Old administrative delegation - never cleaned up"
+    description: "Old administrative delegation - never cleaned up, holds DCSync rights directly (never nested into Domain Admins, so it never got flagged/protected)"
+  - name: GG_FormerHokage
+    scope: global
+    category: security
+    path: "{{ ad_privileged_ou }}"
+    description: "Historical record of past Hokage - purely cosmetic, no rights attached. Not every dead account is a way in (see docs/NOAD.md)."
   - name: GG_TempAdmins
     scope: global
     category: security
@@ -461,9 +466,40 @@ ad_users:
     surname: Sarutobi
     password: "ThirdHokage68!"
     path: "{{ ad_privileged_ou }}"
-    groups: [GG_LegacyAdmins]
+    groups: [GG_LegacyAdmins, GG_FormerHokage]
     disabled: true
-    description: "Sandaime Hokage - died fighting Orochimaru, account disabled but never deleted, still a member of a group nested into Domain Admins and forgotten. Requires an Edo Tensei to 'bring him back' (reactivation via Danzo's GenericWrite)."
+    description: "Sandaime Hokage - died fighting Orochimaru, account disabled but never deleted, still a member of GG_LegacyAdmins (direct DCSync rights) and forgotten. Requires an Edo Tensei to 'bring him back' (reactivation via Danzo's GenericWrite)."
+
+  # --- Former Hokage, deceased - purely historical, no ACL grants target
+  # these accounts and none of them belong to any privileged group beyond
+  # GG_FormerHokage (which has no rights attached). They are genuinely
+  # untouchable: unlike Hiruzen, there is no path in.
+  - name: hashirama.senju
+    firstname: Hashirama
+    surname: Senju
+    password: "Mokuton1First!"
+    path: "{{ ad_privileged_ou }}"
+    groups: [GG_FormerHokage]
+    disabled: true
+    description: "Shodaime Hokage, founder of Konoha - died long ago, account kept for historical record only. No ACL grants, no path in."
+
+  - name: tobirama.senju
+    firstname: Tobirama
+    surname: Senju
+    password: "SuitonSecond1!"
+    path: "{{ ad_privileged_ou }}"
+    groups: [GG_FormerHokage]
+    disabled: true
+    description: "Nidaime Hokage - died long ago, account kept for historical record only. No ACL grants, no path in."
+
+  - name: minato.namikaze
+    firstname: Minato
+    surname: Namikaze
+    password: "Hiraishin1Flash!"
+    path: "{{ ad_privileged_ou }}"
+    groups: [GG_FormerHokage]
+    disabled: true
+    description: "Yondaime Hokage, Naruto's father - died sealing the Nine-Tails, account kept for historical record only. No ACL grants, no path in."
 
   - name: danzo.shimura
     firstname: Danzo
@@ -623,19 +659,23 @@ ad_acl_grants:
     target: GG_ProjectPhoenix
     right: GenericAll
 
-# Group nesting forgotten over time: GG_Hokage is the "legitimate" nesting
-# (Tsunade = de facto Domain Admin), GG_LegacyAdmins is the real weakness
-# (temporary delegation never cleaned up).
+# Group nesting: GG_Hokage is the only group nested into Domain Admins
+# (Tsunade = legitimate, permanent Domain Admin). GG_LegacyAdmins
+# deliberately is NOT nested into Domain Admins - real "forgotten" backdoors
+# avoid protected-group membership precisely to dodge AdminSDHolder/SDProp
+# (which would silently reset any custom ACE sitting on a protected
+# object's ACL every ~60 minutes). Instead it holds DCSync rights directly
+# (see ad_dcsync_grants below) - same end result, but the grant actually
+# survives.
 ad_group_nesting:
   - child: GG_Hokage
-    parent: "Domain Admins"
-  - child: GG_LegacyAdmins
     parent: "Domain Admins"
 
 # Accounts/groups over-provisioned with full replication rights (DCSync:
 # DS-Replication-Get-Changes + DS-Replication-Get-Changes-All).
 ad_dcsync_grants:
   - svc_monitoring
+  - GG_LegacyAdmins
 
 # Local groups to populate on member servers/workstations (beyond the domain join).
 local_admin_grants:

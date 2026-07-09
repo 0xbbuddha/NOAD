@@ -117,20 +117,41 @@ and B.**
 ### The Edo Tensei twist
 
 `hiruzen.sarutobi` (Third Hokage) **died in battle against Orochimaru**, so
-his account is disabled (`ACCOUNTDISABLE`) but was never deleted. His
-`GG_LegacyAdmins` membership - nested into Domain Admins - still exists.
-`danzo.shimura`'s `GenericWrite` covers **both** `userAccountControl` and
-`msDS-KeyCredentialLink` (kept unscoped on purpose - a property-scoped grant
-would only cover one of the two and break this):
+his account is disabled (`ACCOUNTDISABLE`) but was never deleted. He's
+still a member of `GG_LegacyAdmins`, which holds **DCSync rights directly**
+(`DS-Replication-Get-Changes` + `-All`) - deliberately *not* nested into
+Domain Admins, exactly like a real forgotten backdoor would avoid
+protected-group membership to stay off the radar (see the AdminSDHolder
+note below). `danzo.shimura`'s `GenericWrite` covers **both**
+`userAccountControl` and `msDS-KeyCredentialLink` (kept unscoped on purpose
+- a property-scoped grant would only cover one of the two and break this):
 
 1. Clear `ACCOUNTDISABLE` (`Set-ADAccountControl -Enabled $true`) -
    "reanimate" the account. A password-based logon is still impossible.
 2. Add a shadow public key (Whisker/Rubeus `shadowcreds`) and authenticate
    via PKINIT without ever knowing his password.
+3. `secretsdump.py noad.local/hiruzen.sarutobi@hokage-dc01 -just-dc` -
+   DCSync via `GG_LegacyAdmins`.
 
 Technically, this is exactly what an Edo Tensei represents: a dead account
 is brought back and answers to whoever cast the jutsu - and it hands over
-Domain Admin directly through the forgotten `GG_LegacyAdmins` nesting.
+full domain compromise through the forgotten `GG_LegacyAdmins` grant.
+
+**Why not just nest `GG_LegacyAdmins` into Domain Admins?** Membership in
+Domain Admins (even indirect, via a nested group) flags an account as
+"protected" by AD (`adminCount=1`), and the SDProp process silently resets
+its ACL to the AdminSDHolder template roughly every 60 minutes - which
+would wipe `danzo.shimura`'s `GenericWrite` before an attacker could ever
+use it. Granting DCSync rights directly (the same mechanism as
+`svc_monitoring`) reaches the same outcome without ever touching a
+protected group, so the ACE actually survives. This mirrors how real
+"forgotten" privilege escalation paths are built in practice - Domain
+Admins nesting gets noticed and cleaned up (or protected by AD itself);
+a directly-delegated right on an obscure legacy group does not.
+
+**PKINIT requires the `NOADCA` Enterprise CA on `hokage-dc01`** (installed
+specifically so this works - no vulnerable templates, see `docs/NOAD.md`
+Scope section).
 
 ## Independent bonus: unconstrained delegation
 
@@ -150,6 +171,13 @@ only needs network position, not a specific account: `anbu-srv01` is marked
 - `svc_ibiki` and `svc_iis` are Kerberoastable but carry long random
   passwords - don't waste hashcat time on them (`svc_iis`'s real password
   does leak in `\\anbu-srv01\IT`, independent of Kerberoasting).
+- `GG_FormerHokage` groups the four historical Hokage
+  (`hashirama.senju`, `tobirama.senju`, `minato.namikaze`,
+  `hiruzen.sarutobi`) - all disabled, all deceased in-lore. Only
+  `hiruzen.sarutobi` is actually reachable, through `GG_LegacyAdmins`
+  (a separate membership). The other three have no ACL grants pointing
+  at them anywhere - they're in the domain for the story, not the attack
+  path.
 
 ## Suggested tools
 

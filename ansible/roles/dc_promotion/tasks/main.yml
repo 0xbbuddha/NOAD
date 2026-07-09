@@ -42,3 +42,45 @@
 - name: Wait for the DC to be fully operational after promotion
   ansible.windows.win_reboot:
   when: domain_result.reboot_required | default(false)
+
+# --- Minimal ADCS: just enough for PKINIT (Shadow Credentials / Edo Tensei)
+#     to actually authenticate. No vulnerable certificate templates are
+#     configured here - ESC1/ESC4/ESC8-style abuse is out of scope for NOAD
+#     Core (see the "Kumo" extension in docs/architecture.md). Installing an
+#     Enterprise CA requires Enterprise Admins, not just Domain Admins.
+- name: Add the automation account to Enterprise Admins (required to install an Enterprise CA)
+  ansible.windows.win_shell: |
+    $already = Get-ADGroupMember -Identity "Enterprise Admins" | Where-Object { $_.SamAccountName -eq "vagrant" }
+    if (-not $already) {
+      Add-ADGroupMember -Identity "Enterprise Admins" -Members vagrant
+      Write-Output "CHANGED"
+    } else {
+      Write-Output "OK"
+    }
+  register: entadmins_result
+  changed_when: "'CHANGED' in entadmins_result.stdout"
+
+- name: Install the ADCS Certificate Authority role
+  ansible.windows.win_feature:
+    name: ADCS-Cert-Authority
+    include_management_tools: true
+    state: present
+  register: adcs_feature
+
+- name: Configure the Enterprise Root CA (NOADCA)
+  ansible.windows.win_shell: |
+    if (-not (Get-Service -Name CertSvc -ErrorAction SilentlyContinue)) {
+      Install-AdcsCertificationAuthority -CAType EnterpriseRootCa -CACommonName NOADCA -KeyLength 2048 -HashAlgorithmName SHA256 -Force
+      Write-Output "CHANGED"
+    } else {
+      Write-Output "OK"
+    }
+  register: adcs_result
+  changed_when: "'CHANGED' in adcs_result.stdout"
+
+- name: Force certificate autoenrollment so the DC gets its KDC authentication certificate
+  ansible.windows.win_shell: |
+    gpupdate /force | Out-Null
+    certutil -pulse | Out-Null
+  changed_when: false
+  when: adcs_result.changed

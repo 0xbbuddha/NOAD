@@ -86,12 +86,13 @@ NOAD.LOCAL
 | GG_Medical / GG_Mission / GG_Finance / GG_Research / GG_IT | Functional | Departments |
 | GG_Backup / GG_SQL / GG_Helpdesk | Functional | Technical operations |
 | GG_Team7 / GG_Team8 / GG_Team10 / GG_TeamGai | Cosmetic | Teams (realistic BloodHound noise) |
-| GG_LegacyAdmins    | **Trap**   | **Forgotten** nesting into Domain Admins (never-cleaned-up delegation) |
+| GG_LegacyAdmins    | **Trap**   | **Forgotten** direct DCSync rights (never nested into Domain Admins, so AdminSDHolder never protects it) |
 | GG_TempAdmins      | **Trap**   | Local administrator of `mission-srv01`, "temporary" access never revoked - reachable via a forgotten multi-hop ACL chain, not a direct grant |
 | GG_ProjectPhoenix  | **Trap**   | Deliberate dead end (target of a GenericAll leading nowhere)       |
 | GG_Archive         | **Trap**   | Dead group, pure BloodHound noise                                  |
+| GG_FormerHokage    | **Cosmetic** | Historical record of past Hokage - no rights attached at all. Only one of its four members (`hiruzen.sarutobi`) is actually a way in (via `GG_LegacyAdmins`, separately) |
 
-## Users (37 accounts)
+## Users (40 accounts)
 
 `sAMAccountName` convention: **firstname.lastname** in lowercase - see the
 OSINT section below, this is intentional.
@@ -133,8 +134,11 @@ OSINT section below, this is intentional.
 | kabuto.yakushi          | Research         | GG_Research, GG_Genin                    | `GenericAll` (dead end) over `GG_ProjectPhoenix` |
 | ibiki.morino            | IT               | GG_IT, GG_Helpdesk                       | Human account, distinct from the `svc_ibiki` service account |
 | anko.mitarashi          | IT               | GG_IT, GG_Helpdesk                       | - |
-| hiruzen.sarutobi        | Privileged       | GG_LegacyAdmins                          | **Disabled account** (died in battle) - Domain Admin via forgotten nesting, "resurrection" possible via Edo Tensei (see Arc 5) |
+| hiruzen.sarutobi        | Privileged       | GG_LegacyAdmins                          | **Disabled account** (died in battle) - DCSync via GG_LegacyAdmins, "resurrection" possible via Edo Tensei (see Arc 5) |
 | danzo.shimura           | Privileged       | GG_IT                                    | `GenericWrite` (covers both `userAccountControl` and `msDS-KeyCredentialLink` - needed for the two-step Edo Tensei) over `hiruzen.sarutobi` |
+| hashirama.senju         | Privileged       | GG_FormerHokage                          | **Disabled**, purely historical - no ACL grants target this account, no path in |
+| tobirama.senju          | Privileged       | GG_FormerHokage                          | **Disabled**, purely historical - no ACL grants target this account, no path in |
+| minato.namikaze         | Privileged       | GG_FormerHokage                          | **Disabled**, purely historical - no ACL grants target this account, no path in |
 
 ## Service accounts (OU=Service Accounts)
 
@@ -213,10 +217,10 @@ one and follow it through - you don't need all three.
   `ms-DS-MachineAccountQuota` to register a fake computer account and
   configure RBCD on `mission-srv01$` - "clone yourself" instead of stealing
   someone else's identity.
-- **Origin C - Generic spray -> Domain Admin directly**: reaches
-  `svc_monitoring` (DCSync) or `danzo.shimura` (the Edo Tensei twist:
-  reanimating the disabled `hiruzen.sarutobi` account via Shadow
-  Credentials, who is still nested in Domain Admins).
+- **Origin C - Generic spray -> full domain compromise via DCSync**: reaches
+  `svc_monitoring` (direct DCSync rights) or `danzo.shimura` (the Edo Tensei
+  twist: reanimating the disabled `hiruzen.sarutobi` account via Shadow
+  Credentials - he holds DCSync rights through `GG_LegacyAdmins`).
 - **Bonus, from any origin**: local escalation on `academy-ws01`
   (AlwaysInstallElevated, unquoted service path, GPP cpassword in SYSVOL)
   and unconstrained delegation + coercion via `anbu-srv01`.
@@ -249,9 +253,12 @@ To keep a reliable single-pass deployment, the following items are
 - **Real SQL Server** on `mission-srv01`: the "SQL" role is simulated via
   an SPN (`MSSQLSvc`), file shares and configuration files with plaintext
   credentials - no SQL Server instance is actually installed.
-- **ADCS (ESC1/ESC4/ESC8)**: requires a full PKI, deliberately deferred to
-  a future extension.
-- **Windows LAPS** (schema extension + GPO): same, deferred.
+- **ADCS certificate abuse (ESC1/ESC4/ESC8)**: `hokage-dc01` does run a
+  minimal Enterprise Root CA (`NOADCA`) - installed only so PKINIT works
+  (required for Shadow Credentials / Edo Tensei), with no custom or
+  vulnerable certificate templates configured. The actual ESC1-style
+  abuse is deliberately deferred to a future extension.
+- **Windows LAPS** (schema extension + GPO): deferred.
 
 ## Future extensions (not built)
 
