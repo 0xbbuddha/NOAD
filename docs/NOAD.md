@@ -87,7 +87,7 @@ NOAD.LOCAL
 | GG_Backup / GG_SQL / GG_Helpdesk | Functional | Technical operations |
 | GG_Team7 / GG_Team8 / GG_Team10 / GG_TeamGai | Cosmetic | Teams (realistic BloodHound noise) |
 | GG_LegacyAdmins    | **Trap**   | **Forgotten** nesting into Domain Admins (never-cleaned-up delegation) |
-| GG_TempAdmins      | **Trap**   | Local administrator of `mission-srv01`, "temporary" access never revoked |
+| GG_TempAdmins      | **Trap**   | Local administrator of `mission-srv01`, "temporary" access never revoked - reachable via a forgotten multi-hop ACL chain, not a direct grant |
 | GG_ProjectPhoenix  | **Trap**   | Deliberate dead end (target of a GenericAll leading nowhere)       |
 | GG_Archive         | **Trap**   | Dead group, pure BloodHound noise                                  |
 
@@ -114,7 +114,7 @@ OSINT section below, this is intentional.
 | konohamaru.sarutobi     | Academy          | GG_Genin                                | Target of `mizuki.touji`'s forgotten GenericWrite |
 | ebisu.tokuma            | Academy          | GG_Chunin                               | - |
 | sasuke.uchiha           | Academy          | GG_Genin, GG_Team7                      | `GenericAll` over `sakura.haruno` |
-| sakura.haruno           | Academy          | GG_Genin, GG_Team7, GG_Medical           | Target of sasuke's GenericAll |
+| sakura.haruno           | Academy          | GG_Genin, GG_Team7, GG_Medical           | Target of sasuke's GenericAll, and holds `WriteOwner` over `shizune.kato` (hop 2 of a multi-hop chain) |
 | hinata.hyuga            | Academy          | GG_Genin, GG_Team8                      | - |
 | kiba.inuzuka            | Academy          | GG_Genin, GG_Team8                      | - |
 | shino.aburame           | Academy          | GG_Genin, GG_Team8                      | - |
@@ -123,8 +123,8 @@ OSINT section below, this is intentional.
 | rock.lee                | Academy          | GG_Genin, GG_TeamGai                    | - |
 | neji.hyuga              | Academy          | GG_Genin, GG_TeamGai                    | - |
 | tenten.mitsu            | Academy          | GG_Genin, GG_TeamGai                    | - |
-| mizuki.touji            | Academy          | GG_Chunin                               | Forgotten `GenericWrite` over `konohamaru.sarutobi` |
-| shizune.kato            | Medical          | GG_Medical, GG_Chunin                    | - |
+| mizuki.touji            | Academy          | GG_Chunin                               | Forgotten `ForceChangePassword` over `konohamaru.sarutobi` (password reset only, hence the dead end) |
+| shizune.kato            | Medical          | GG_Medical, GG_Chunin                    | Holds `WriteDacl` over `GG_TempAdmins` (hop 3 of a multi-hop chain, see attack-path.md) |
 | kotetsu.hagane          | Mission          | GG_Mission, GG_Chunin                    | Same password as `izumo.kamizuki` |
 | izumo.kamizuki          | Mission          | GG_Mission, GG_Chunin                    | Same password as `kotetsu.hagane` |
 | zabuza.momochi          | Mission          | GG_Genin                                | Mercenary retained for Wave Country bridge security, killed in action, local admin on `mission-srv01` never revoked |
@@ -134,7 +134,7 @@ OSINT section below, this is intentional.
 | ibiki.morino            | IT               | GG_IT, GG_Helpdesk                       | Human account, distinct from the `svc_ibiki` service account |
 | anko.mitarashi          | IT               | GG_IT, GG_Helpdesk                       | - |
 | hiruzen.sarutobi        | Privileged       | GG_LegacyAdmins                          | **Disabled account** (died in battle) - Domain Admin via forgotten nesting, "resurrection" possible via Edo Tensei (see Arc 5) |
-| danzo.shimura           | Privileged       | GG_IT                                    | `GenericWrite` (Shadow Credentials) over `hiruzen.sarutobi` |
+| danzo.shimura           | Privileged       | GG_IT                                    | `GenericWrite` (covers both `userAccountControl` and `msDS-KeyCredentialLink` - needed for the two-step Edo Tensei) over `hiruzen.sarutobi` |
 
 ## Service accounts (OU=Service Accounts)
 
@@ -146,7 +146,7 @@ OSINT section below, this is intentional.
 | svc_backup        | `BackupExec/mission-srv01.noad.local`                 | GG_Backup   | Kerberoastable, local admin of `mission-srv01` |
 | svc_iis           | `HTTP/anbu-srv01.noad.local:8080`                     | GG_IT       | IIS application pool identity - Kerberoastable but a **dead end** (strong random password); the real password still leaks in plaintext via the `\\anbu-srv01\IT` share |
 | svc_print         | -                                                      | GG_IT       | Tied to the print spooler (PrinterBug) |
-| svc_inventory     | -                                                      | GG_IT       | Forgotten `GenericWrite` over the `mission-srv01$` computer object -> RBCD |
+| svc_inventory     | -                                                      | GG_IT       | Forgotten `WriteProperty` scoped to `msDS-AllowedToActOnBehalfOfOtherIdentity` on the `mission-srv01$` computer object -> RBCD |
 | svc_anbu          | `ANBUTools/anbu-srv01.noad.local`                     | GG_ANBU     | Kerberoastable, same password as `itachi.uchiha` |
 | svc_monitoring    | -                                                      | GG_IT       | Over-privileged: DCSync rights (`DS-Replication-Get-Changes[-All]`) |
 
@@ -196,21 +196,36 @@ sudo wg-quick up noad     # bring the tunnel up
 sudo wg-quick down noad   # tear it down
 ```
 
-## Attack progression (arcs)
+## Attack progression: three independent origins
 
-See `docs/attack-path.md` for the full technical detail.
+See `docs/attack-path.md` for the full technical detail. Inspired by how
+GOAD structures its scenarios: distinct entry points requiring genuinely
+different techniques, not a single foothold that unlocks everything. Pick
+one and follow it through - you don't need all three.
 
-- **Arc 1 - Academy**: reconnaissance (SMB/LDAP/DNS, the IT wiki on
-  `anbu-srv01`, shares).
-- **Arc 2 - Genin**: initial access (AS-REP roasting on `naruto.uzumaki`).
-- **Arc 3 - Chunin**: local escalation on `academy-ws01`
-  (AlwaysInstallElevated, an unquoted service path, a GPP cpassword in
-  SYSVOL, plaintext credentials on the shares).
-- **Arc 4 - Jonin**: AD escalation (Kerberoasting, ACL abuse, reused
-  passwords, unconstrained delegation, RBCD).
-- **Arc 5 - ANBU**: DCSync via `svc_monitoring`, Shadow Credentials
-  (`danzo.shimura` -> `hiruzen.sarutobi`), the forgotten nesting of
-  `GG_LegacyAdmins` into Domain Admins.
+- **Origin A - AS-REP Roasting**: `naruto.uzumaki` -> a jutsu-themed
+  password spray reveals the Team 7/Genin friend group -> a multi-hop ACL
+  chain (`GenericAll` -> `WriteOwner` -> `WriteDacl`) reaches local admin
+  on `mission-srv01`.
+- **Origin B - Generic password spray -> Kage Bunshin (RBCD)**: a
+  role-based spray (unrelated to jutsu names) reaches the Mission desk and
+  `svc_inventory` -> Kerberoasting -> abusing the default
+  `ms-DS-MachineAccountQuota` to register a fake computer account and
+  configure RBCD on `mission-srv01$` - "clone yourself" instead of stealing
+  someone else's identity.
+- **Origin C - Generic spray -> Domain Admin directly**: reaches
+  `svc_monitoring` (DCSync) or `danzo.shimura` (the Edo Tensei twist:
+  reanimating the disabled `hiruzen.sarutobi` account via Shadow
+  Credentials, who is still nested in Domain Admins).
+- **Bonus, from any origin**: local escalation on `academy-ws01`
+  (AlwaysInstallElevated, unquoted service path, GPP cpassword in SYSVOL)
+  and unconstrained delegation + coercion via `anbu-srv01`.
+
+Kerberoasting itself is available from any authenticated foothold - that's
+real Kerberos behavior, not a designed gate. What actually keeps the
+origins distinct: `svc_inventory`/`svc_monitoring`/`svc_print` carry no SPN
+at all, and no password is shared between the jutsu-themed group and the
+generic-IT group.
 
 ## OSINT: enumerating usernames
 

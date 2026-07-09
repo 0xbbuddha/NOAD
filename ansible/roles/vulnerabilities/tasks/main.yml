@@ -22,24 +22,45 @@
   when: inventory_hostname in groups['dc']
 
 # --- ACL abuse: trustee gets a right over target (e.g. GenericAll,
-#     GenericWrite -> also covers writing msDS-KeyCredentialLink for a
-#     Shadow Credentials-style abuse, or a computer object for RBCD) ---
+#     GenericAll/WriteOwner/WriteDacl are unscoped ActiveDirectoryRights.
+#     Some entries also set "right_guid" to scope the ACE to a single
+#     property or extended right (e.g. ForceChangePassword, or a
+#     WriteProperty limited to msDS-KeyCredentialLink/
+#     msDS-AllowedToActOnBehalfOfOtherIdentity) instead of a blanket grant. ---
 - name: "ACL abuse: grant the rights defined in ad_acl_grants"
   ansible.windows.win_shell: |
     $trustee = Get-ADObject -Filter "SamAccountName -eq '{{ item.trustee }}'" -Properties objectSid
     $target  = Get-ADObject -Filter "SamAccountName -eq '{{ item.target }}'" -Properties distinguishedName
     $sid     = New-Object System.Security.Principal.SecurityIdentifier($trustee.objectSid)
     $acl     = Get-Acl "AD:$($target.DistinguishedName)"
+    {% if item.right_guid is defined %}
+    $objectGuid = [Guid]"{{ item.right_guid }}"
+    $already = $acl.Access | Where-Object {
+      $_.IdentityReference.Value -like "*\{{ item.trustee }}" -and
+      $_.ActiveDirectoryRights -match "{{ item.right }}" -and
+      $_.ObjectType -eq $objectGuid
+    }
+    {% else %}
     $already = $acl.Access | Where-Object {
       $_.IdentityReference.Value -like "*\{{ item.trustee }}" -and
       $_.ActiveDirectoryRights -match "{{ item.right }}"
     }
+    {% endif %}
     if (-not $already) {
+    {% if item.right_guid is defined %}
+      $rule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        $sid,
+        [System.DirectoryServices.ActiveDirectoryRights]::{{ item.right }},
+        [System.Security.AccessControl.AccessControlType]::Allow,
+        $objectGuid
+      )
+    {% else %}
       $rule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
         $sid,
         [System.DirectoryServices.ActiveDirectoryRights]::{{ item.right }},
         [System.Security.AccessControl.AccessControlType]::Allow
       )
+    {% endif %}
       $acl.AddAccessRule($rule)
       Set-Acl -Path "AD:$($target.DistinguishedName)" -AclObject $acl
       Write-Output "CHANGED"

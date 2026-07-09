@@ -152,7 +152,7 @@ ad_groups:
     scope: global
     category: security
     path: "{{ ad_privileged_ou }}"
-    description: "Temporary access granted during a migration - never revoked"
+    description: "Temporary access granted during a migration - never revoked, reachable via a forgotten multi-hop ACL chain (see docs/attack-path.md)"
   - name: GG_ProjectPhoenix
     scope: global
     category: security
@@ -304,7 +304,7 @@ ad_users:
     password: "CherryBlossom1!"
     path: "{{ ad_academy_ou }}"
     groups: [GG_Genin, GG_Team7, GG_Medical]
-    description: "Genin, medic-nin apprentice"
+    description: "Genin, medic-nin apprentice - a bulk medical-corps onboarding script accidentally left her as the object owner (WriteOwner) of Shizune's account"
 
   - name: hinata.hyuga
     firstname: Hinata
@@ -376,7 +376,7 @@ ad_users:
     password: "Traitor1Scroll!"
     path: "{{ ad_academy_ou }}"
     groups: [GG_Chunin]
-    description: "Instructor - holds a forgotten GenericWrite right over Konohamaru"
+    description: "Instructor - holds a forgotten ForceChangePassword right over Konohamaru (password reset only, hence the dead end)"
 
   # --- Medical ---
   - name: shizune.kato
@@ -385,7 +385,7 @@ ad_users:
     password: "Tonton1Pig!"
     path: "{{ ad_medical_ou }}"
     groups: [GG_Medical, GG_Chunin]
-    description: "Tsunade's assistant"
+    description: "Tsunade's assistant - inherited a forgotten WriteDacl over GG_TempAdmins from an old project handover"
 
   # --- Mission ---
   - name: kotetsu.hagane
@@ -540,7 +540,7 @@ ad_service_accounts:
     password: "InventoryScan1!"
     path: "{{ ad_service_accounts_ou }}"
     groups: [GG_IT]
-    description: "IT inventory tool - holds a forgotten GenericWrite over the mission-srv01$ computer object (RBCD)"
+    description: "IT inventory tool - holds a forgotten WriteProperty right scoped to msDS-AllowedToActOnBehalfOfOtherIdentity on the mission-srv01$ computer object (RBCD)"
 
   - name: svc_anbu
     firstname: ANBU
@@ -571,18 +571,54 @@ ad_unconstrained_delegation_computers:
 # System.DirectoryServices.ActiveDirectoryRights enum (GenericWrite also
 # covers writing msDS-KeyCredentialLink -> "Shadow Credentials" abuse).
 ad_acl_grants:
+  # sasuke.uchiha -> sakura.haruno : the "ACL abuse 101" example, kept as a
+  # blunt GenericAll on purpose (reset her password or drop a Shadow
+  # Credential directly).
   - trustee: sasuke.uchiha
     target: sakura.haruno
     right: GenericAll
+
+  # Multi-hop chain (BloodHound-only, no single obvious edge to the target):
+  # sasuke.uchiha -[GenericAll]-> sakura.haruno -[WriteOwner]-> shizune.kato
+  # -[WriteDacl]-> GG_TempAdmins -[local admin]-> mission-srv01. Each hop
+  # uses a different technique: WriteOwner means taking ownership of
+  # shizune.kato first (Set-DomainObjectOwner) before you can grant
+  # yourself further rights on her; WriteDacl on GG_TempAdmins means you
+  # must write yourself a fresh ACE (dacledit.py / Add-DomainObjectAcl)
+  # before you can add yourself as a member.
+  - trustee: sakura.haruno
+    target: shizune.kato
+    right: WriteOwner
+  - trustee: shizune.kato
+    target: GG_TempAdmins
+    right: WriteDacl
+
+  # Shadow Credentials / Edo Tensei: kept as GenericWrite on purpose - the
+  # Edo Tensei twist needs Danzo to write BOTH userAccountControl (clear
+  # ACCOUNTDISABLE to "reanimate" Hiruzen) AND msDS-KeyCredentialLink (the
+  # actual Shadow Credential). A property-scoped grant would only cover
+  # one of the two and break the two-step narrative.
   - trustee: danzo.shimura
     target: hiruzen.sarutobi
     right: GenericWrite
+
+  # RBCD: narrowly scoped to msDS-AllowedToActOnBehalfOfOtherIdentity
+  # instead of a blanket GenericWrite on the computer object.
   - trustee: svc_inventory
     target: "mission-srv01$"
-    right: GenericWrite
+    right: WriteProperty
+    right_guid: "3f78c3e5-f79a-46bd-a0b8-9d18116ddc79" # msDS-AllowedToActOnBehalfOfOtherIdentity
+
+  # Decoy: only the "User-Force-Change-Password" extended right - Mizuki
+  # can reset Konohamaru's password and nothing else (no Shadow
+  # Credentials, no property reads), which is also why it's a dead end.
   - trustee: mizuki.touji
     target: konohamaru.sarutobi
-    right: GenericWrite
+    right: ExtendedRight
+    right_guid: "00299570-246d-11d0-a768-00aa006e0529" # User-Force-Change-Password
+
+  # Decoy: a full GenericAll that looks like a jackpot but leads to an
+  # archived, empty group - a deliberate dead end.
   - trustee: kabuto.yakushi
     target: GG_ProjectPhoenix
     right: GenericAll
