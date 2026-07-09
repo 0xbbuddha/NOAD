@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/logo.png" alt="NOAD" width="160" />
+  <img src="assets/logo.png" alt="NOAD" width="200" />
 
   <h1>NOAD</h1>
   <p><strong>Naruto Oriented Active Directory</strong></p>
