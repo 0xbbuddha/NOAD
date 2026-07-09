@@ -489,7 +489,7 @@ ad_service_accounts:
   - name: svc_sql
     firstname: SQL
     surname: Service
-    password: "Sql2024Weak!"
+    password: "Sql2026Weak!"
     path: "{{ ad_service_accounts_ou }}"
     groups: [GG_SQL]
     spn:
@@ -499,7 +499,7 @@ ad_service_accounts:
   - name: svc_mission
     firstname: Mission
     surname: App
-    password: "Sql2024Weak!"
+    password: "Sql2026Weak!"
     path: "{{ ad_service_accounts_ou }}"
     groups: [GG_Mission]
     spn:
@@ -509,7 +509,7 @@ ad_service_accounts:
   - name: svc_backup
     firstname: Backup
     surname: Service
-    password: "Backup2024!"
+    password: "Backup2026!"
     path: "{{ ad_service_accounts_ou }}"
     groups: [GG_Backup]
     spn:
@@ -519,7 +519,7 @@ ad_service_accounts:
   - name: svc_iis
     firstname: IIS
     surname: AppPool
-    password: "IisPool2024!"
+    password: "IisPool2026!"
     path: "{{ ad_service_accounts_ou }}"
     groups: [GG_IT]
     spn:
@@ -555,7 +555,7 @@ ad_service_accounts:
   - name: svc_monitoring
     firstname: Monitoring
     surname: Agent
-    password: "Monitor2024!"
+    password: "Monitor2026!"
     path: "{{ ad_service_accounts_ou }}"
     groups: [GG_IT]
     description: "Monitoring agent - over-privileged with replication (DCSync) rights"

@@ -161,6 +161,41 @@ All passwords (users and service accounts) are defined in
 | Administrator (RID 500)   | `NarutoLab2026!`  | Built-in local admin of hokage-dc01                |
 | Safe Mode Password (DSRM) | `NarutoDSRM2026!` | Directory Services Restore Mode                    |
 
+## Remote access (WireGuard)
+
+`192.168.56.0/24` is a VirtualBox private network, only reachable from the
+deployment host itself. A WireGuard tunnel on the host exposes it to an
+attack machine on the same LAN, without any network changes on the
+Windows VMs (the host masquerades the tunnel traffic as its own
+`192.168.56.1` address, so the VMs just see and answer local traffic).
+
+| Item              | Value                          |
+|--------------------|--------------------------------|
+| Server             | `192.168.1.21:51820` (UDP)      |
+| Tunnel subnet       | `10.66.66.0/24`                 |
+| Server config       | `/etc/wireguard/wg0.conf` (host) |
+| Service             | `wg-quick@wg0` (enabled, starts on boot) |
+| Split tunnel        | Only `192.168.56.0/24` (the lab) is routed through the tunnel |
+
+Client config (attack machine), `/etc/wireguard/noad.conf`:
+
+```ini
+[Interface]
+PrivateKey = <client private key, see ~/.wg-noad/client_private.key on the host>
+Address = 10.66.66.2/24
+
+[Peer]
+PublicKey = M1pj9tvatDFm4w1l5k6uf0lcYv8qf9GfSC+xbvqSj3Y=
+Endpoint = 192.168.1.21:51820
+AllowedIPs = 192.168.56.0/24
+PersistentKeepalive = 25
+```
+
+```bash
+sudo wg-quick up noad     # bring the tunnel up
+sudo wg-quick down noad   # tear it down
+```
+
 ## Attack progression (arcs)
 
 See `docs/attack-path.md` for the full technical detail.

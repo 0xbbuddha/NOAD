@@ -33,7 +33,7 @@
     dest: C:\Shares\IT\deploy_svc_iis.ps1
     content: |
       # (Re)deployment script for the IIS application pool - ANBU IT
-      $cred = New-Object PSCredential("{{ domain_netbios }}\svc_iis", (ConvertTo-SecureString "IisPool2024!" -AsPlainText -Force))
+      $cred = New-Object PSCredential("{{ domain_netbios }}\svc_iis", (ConvertTo-SecureString "IisPool2026!" -AsPlainText -Force))
       # TODO: automate password rotation for this account (never done since it went into production)
   when: inventory_hostname == 'anbu-srv01'
 
@@ -61,7 +61,7 @@
     dest: C:\Shares\Backups\backup_job.ps1
     content: |
       # Scheduled backup job for the mission database
-      $cred = New-Object PSCredential("{{ domain_netbios }}\svc_backup", (ConvertTo-SecureString "Backup2024!" -AsPlainText -Force))
+      $cred = New-Object PSCredential("{{ domain_netbios }}\svc_backup", (ConvertTo-SecureString "Backup2026!" -AsPlainText -Force))
   when: inventory_hostname == 'mission-srv01'
 
 - name: Drop an application config file with a plaintext connection string
@@ -70,7 +70,7 @@
     content: |
       <configuration>
         <connectionStrings>
-          <add name="MissionDB" connectionString="Server=mission-srv01;Database=Missions;User Id=svc_sql;Password=Sql2024Weak!;" />
+          <add name="MissionDB" connectionString="Server=mission-srv01;Database=Missions;User Id=svc_sql;Password=Sql2026Weak!;" />
         </connectionStrings>
       </configuration>
   when: inventory_hostname == 'mission-srv01'
@@ -151,7 +151,7 @@
       $aes.IV = New-Object byte[](16)
       $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
       $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
-      $plain = [System.Text.Encoding]::Unicode.GetBytes("HelpDesk2024!")
+      $plain = [System.Text.Encoding]::Unicode.GetBytes("HelpDesk2026!")
       $encryptor = $aes.CreateEncryptor()
       $encrypted = $encryptor.TransformFinalBlock($plain, 0, $plain.Length)
       $cpassword = [Convert]::ToBase64String($encrypted).TrimEnd('=').Replace('+','-').Replace('/','_')
@@ -159,7 +159,7 @@
       $xml = @"
     <?xml version="1.0" encoding="utf-8"?>
     <Groups clsid="{3125E937-EB16-4b4c-9934-544FC6D24D26}">
-      <User clsid="{DF5F1855-51E5-4d24-8B1A-D9BDE98BA1D1}" name="svcdesk" image="2" changed="2024-01-15 10:00:00" uid="{12345678-1234-1234-1234-123456789abc}">
+      <User clsid="{DF5F1855-51E5-4d24-8B1A-D9BDE98BA1D1}" name="svcdesk" image="2" changed="2026-01-15 10:00:00" uid="{12345678-1234-1234-1234-123456789abc}">
         <Properties action="U" newName="" fullName="IT Helpdesk Local Account" description="Local account created by Group Policy - IT Helpdesk" cpassword="$cpassword" changeLogon="0" noChange="0" neverExpires="1" acctDisabled="0" userName="svcdesk"/>
       </User>
     </Groups>

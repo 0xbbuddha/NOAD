@@ -42,7 +42,7 @@ Several independent vectors, all deployed by the `services_setup` role:
   MS14-025 AES key is present in SYSVOL
   (`\\hokage-dc01\SYSVOL\noad.local\Policies\{7F3E9A10-...}\Machine\Preferences\Groups\Groups.xml`),
   decryptable with `gpp-decrypt` or `Get-GPPPassword.ps1` (local account
-  `svcdesk`, password `HelpDesk2024!`).
+  `svcdesk`, password `HelpDesk2026!`).
 - **Plaintext credentials on the shares**: `deploy_svc_iis.ps1` on
   `\\anbu-srv01\IT` (svc_iis's password), `backup_job.ps1` and
   `mission_db_config.xml` on `mission-srv01` (svc_backup's and svc_sql's
